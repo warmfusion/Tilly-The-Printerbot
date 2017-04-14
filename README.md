@@ -1,13 +1,20 @@
 This is Tilly... a printer bot that'll print messages from slack onto till roll
 thermal paper for posterity/evidence for your team.
 
-[![Tilly - The Slackbot Printer](Tilly-v0.1-YouTube.png)](https://www.youtube.com/watch?v=tEmO9eDk9JQ "Tilly - The Slackbot Printer")
+[Tilly - The Slackbot Printer](Tilly-v1.0-Demo.jpg)
+
 
 # Usage
 
 1. Follow the Setup instructions below to get API tokens and the service running
-1. Add @printerbot (or whatever you named your integration) to the room
+1. Add `@tilly` (or whatever you named your integration) to the room
 1. 'React' to a message with the `:printer:` emoji and the printer will do its thing
+
+## Known Issues
+
+- Adding `@tilly` to a private channel seems to change the internal id so older messages
+    can't be found as the channel ID doesn't exist..?
+- @mentions are showing internal ID values rather than friendly names
 
 ## TODO
 
@@ -26,6 +33,10 @@ thermal paper for posterity/evidence for your team.
 
 # Building The Hardware
 
+Heres a working prototype before she got her lovely case.
+
+[![Tilly - The Slackbot Printer](Tilly-v0.1-YouTube.png)](https://www.youtube.com/watch?v=tEmO9eDk9JQ "Tilly - The Slackbot Printer")
+
 ## Parts List
 
 1. Raspberry Pi
@@ -43,9 +54,10 @@ thermal paper for posterity/evidence for your team.
 
 ## Prepare
 
-1. Get 'Custom Integration' token
-  - Bot/OAuth keys don't work as they dont have permission to get arbitrary item data
-    via web client
+1. Create a new Custom Bot integration
+    - Can't use a 'App Bot' account as the `channels.history` API is not accessible
+    and as tilly can be added to any room and interact with messages in the past this
+    is a required permission.
 1. Connect up printer+start app
 1. git clone https://github.com/warmfusion/Tilly-The-Printerbot.git
 
