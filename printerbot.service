@@ -1,0 +1,12 @@
+[Unit]
+Description=PrinterBot - Slack Printer Service
+After=network.target
+
+[Service]
+Type=simple
+Environment=SLACK_AUTH_TOKEN=xxxxxxx
+EnvironmentFile=-/etc/default/printerbot
+ExecStart=/usr/share/local/printerbot/printerbot.rb
+
+[Install]
+WantedBy=multi-user.target
