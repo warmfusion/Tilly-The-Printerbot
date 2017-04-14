@@ -1,7 +1,8 @@
-This is Tilly... a printer bot that'll print messages from slack onto till roll
-thermal paper for posterity/evidence for your team.
+[This](docs/Tilly-v1.0-Demo.jpg) is Tilly... a printer bot that'll print
+messages from slack onto till roll thermal paper for posterity/evidence
+for your team.
 
-![Tilly - The Slackbot Printer](docs/Tilly-v1.0-Demo.jpg)
+* [Project Log](https://hackaday.io/project/21191-tilly-the-slack-printer)
 
 
 # Usage
@@ -9,6 +10,7 @@ thermal paper for posterity/evidence for your team.
 1. Follow the Setup instructions below to get API tokens and the service running
 1. Add `@tilly` (or whatever you named your integration) to the room
 1. 'React' to a message with the `:printer:` emoji and the printer will do its thing
+
 
 ## Known Issues
 
@@ -19,7 +21,9 @@ thermal paper for posterity/evidence for your team.
 ## TODO
 
 - [x] Print message based on emoji event
+- [ ] Have some basic interaction to help people find out more about Tilly
 - [ ] Write better documentation about the build
+    - (Tilly - The Slack Printer)[https://hackaday.io/project/21191-tilly-the-slack-printer]
 - [ ] Support command line configuration for printer endpoint/token
 - [ ] Include real usernames when message includes @mentions
     - Currently includes <@U4X4xxxx> strings which isn't so nice
@@ -33,7 +37,10 @@ thermal paper for posterity/evidence for your team.
 
 # Building The Hardware
 
+Find out more on my Hackaday.io project page - (Tilly - The Slack Printer)[https://hackaday.io/project/21191-tilly-the-slack-printer]
+
 Heres a working prototype before she got her lovely case.
+
 
 [![Tilly - The Slackbot Printer](docs/Tilly-v0.1-YouTube.jpg)](https://www.youtube.com/watch?v=tEmO9eDk9JQ "Tilly - The Slackbot Printer")
 
@@ -54,20 +61,21 @@ Heres a working prototype before she got her lovely case.
 
 ## Prepare
 
-1. Create a new Custom Bot integration
-    - Can't use a 'App Bot' account as the `channels.history` API is not accessible
+1. [Create a new Custom Bot](https://my.slack.com/services/new/bot) integration
+    - Can't use a 'App Bot' account as the `channels.history` API
+    [is not accessible](https://api.slack.com/bot-users#api_usage)
     and as tilly can be added to any room and interact with messages in the past this
     is a required permission.
-1. Connect up printer+start app
-1. git clone https://github.com/warmfusion/Tilly-The-Printerbot.git
-
+1. Connect up printer and power everything up
 
 ## Install
 
-   ./install.sh
+    git clone https://github.com/warmfusion/Tilly-The-Printerbot.git tilly
+    cd tilly
+    ./install.sh
 
 If you are using jessie, or a systemd managed operating system, a systemd unit
-file has been included for your convinence.
+file has been included for your convenience.
 
 Simply follow the instructions below to ensure that your Tilly Printer Bot will
 start automatically when your RPi is booted up for hands free operation.
@@ -85,5 +93,5 @@ start automatically when your RPi is booted up for hands free operation.
 
 1. `echo "SLACK_AUTH_TOKEN=YOURTOKEN" > /etc/default/tillyprinterbot`
 1. `systemctl restart printerbot`  # Or SLACK_AUTH_TOKEN=xxxx ruby printerBot.rb
-1. Add @printerbot (or whatever you named your integration) to rooms
-1. 'React' to a message with the `:printer:` emoji and the printer will do its thing
+1. Add `@tilly` (or whatever you named your integration) to rooms
+1. React to a message with the `:printer:` emoji and the printer will do its thing
