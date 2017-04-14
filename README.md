@@ -1,7 +1,7 @@
 This is Tilly... a printer bot that'll print messages from slack onto till roll
 thermal paper for posterity/evidence for your team.
 
-![Tilly - The Slackbot Printer](Tilly-v1.0-Demo.jpg)
+![Tilly - The Slackbot Printer](docs/Tilly-v1.0-Demo.jpg)
 
 
 # Usage
@@ -35,7 +35,7 @@ thermal paper for posterity/evidence for your team.
 
 Heres a working prototype before she got her lovely case.
 
-[![Tilly - The Slackbot Printer](Tilly-v0.1-YouTube.png)](https://www.youtube.com/watch?v=tEmO9eDk9JQ "Tilly - The Slackbot Printer")
+[![Tilly - The Slackbot Printer](docs/Tilly-v0.1-YouTube.jpg)](https://www.youtube.com/watch?v=tEmO9eDk9JQ "Tilly - The Slackbot Printer")
 
 ## Parts List
 
