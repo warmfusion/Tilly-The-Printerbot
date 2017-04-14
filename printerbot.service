@@ -1,12 +1,12 @@
 [Unit]
-Description=PrinterBot - Slack Printer Service
+Description=Tilly The Printer Bot - Slack Printer Service
 After=network.target
 
 [Service]
 Type=simple
-Environment=SLACK_AUTH_TOKEN=xxxxxxx
-EnvironmentFile=-/etc/default/printerbot
-ExecStart=/usr/share/local/printerbot/printerbot.rb
+Environment=SLACK_AUTH_TOKEN=NOT_SET_YET
+EnvironmentFile=-/etc/default/tillyprinterbot
+ExecStart=/usr/local/bin/printerbot
 
 [Install]
 WantedBy=multi-user.target

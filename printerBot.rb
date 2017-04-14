@@ -1,8 +1,15 @@
+#!/usr/bin/env ruby
+
 require 'slack-ruby-client'
 #require 'celluloid-io'
 require 'json'
 require 'date'
-require 'rghost'
+
+if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
+  puts "SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions "
+  puts "   - https://github.com/warmfusion/Tilly-The-Printerbot/"
+  exit 1
+end
 
 REALTIME_TOKEN = ENV['SLACK_AUTH_TOKEN']
 WEB_TOKEN = ENV['SLACK_AUTH_TOKEN']
