@@ -63,13 +63,6 @@ class PrinterBot
     client.start!
   end
 
-  def initialize()
-      # https://cdn-shop.adafruit.com/datasheets/CSN-A2+User+Manual.pdf
-      puts 'Setting printer to upsidedown mode...'
-      send_data_to_printer "\x1B\x7B\x01"
-  end
-
-
   def process_reaction_event(data)
     # I'm only interested in the :printer: reaction
     return unless data['reaction'] == 'printer'
