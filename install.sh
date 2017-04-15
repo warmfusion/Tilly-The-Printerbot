@@ -1,7 +1,7 @@
 #!/bin/bash
 
 apt-get update
-apt-get install libssl-dev
+apt-get install libssl-dev imagemagick
 gem install ruby-slack-client faye-websocket
 
 echo "Setting up symlink for printerBot.rb to /usr/local/bin"

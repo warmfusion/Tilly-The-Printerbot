@@ -1,0 +1,8 @@
+# Core integration to Slack
+gem 'ruby-slack-client'
+gem 'faye-websocket'
+
+# For The Image Processing
+gem 'escpos-image'
+gem 'mini_magick'
+gem 'chunky_png'

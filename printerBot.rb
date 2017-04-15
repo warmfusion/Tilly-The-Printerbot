@@ -5,6 +5,11 @@ require 'slack-ruby-client'
 require 'json'
 require 'date'
 
+require 'escpos'
+require 'escpos/image'
+require 'chunky_png'
+
+
 if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
   puts "SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions "
   puts "   - https://github.com/warmfusion/Tilly-The-Printerbot/"
@@ -17,9 +22,14 @@ PRINTER_TTY="/dev/ttyAMA0"
 MESSAGE_BREAK="---"
 
 
-
 class PrinterBot
 
+  class SlackEvent < Escpos::Report
+    attr_accessor :name
+    attr_accessor :channelName
+    attr_accessor :time
+    attr_accessor :msg
+  end
   # For boring reasons, we need to use two different Slack clients to operate
   # 1. The RealTime client is for obtaining Reaction events without needing to run
   #    a full server with public endpoint
@@ -27,7 +37,6 @@ class PrinterBot
 
   attr_accessor :client
   attr_accessor :webClient
-
 
 
   def start!()
@@ -55,11 +64,9 @@ class PrinterBot
   end
 
   def initialize()
-
       # https://cdn-shop.adafruit.com/datasheets/CSN-A2+User+Manual.pdf
       puts 'Setting printer to upsidedown mode...'
-      send_message_to_printer "\x1B\x7B\x01"
-
+      send_data_to_printer "\x1B\x7B\x01"
   end
 
 
@@ -78,9 +85,8 @@ class PrinterBot
     msg = history.messages.first
     puts msg.to_json
 
-
+    msgUser     = webClient.users_info user: msg['user']
     channelInfo = webClient.channels_info( channel: data.item.channel )
-    channelName = channelInfo['channel']['name_normalized']
 
 #    # FIXME This feels inelegant as a method of finding the right reaction and count
 #    unless msg['reactions'].select{|x| x.name == 'printer' && x.count == 1}.length == 1
@@ -88,69 +94,60 @@ class PrinterBot
 #      return
 #    end
 
-    msgUser =  webClient.users_info user: msg['user']
-    puts "Message was from %s" % msgUser.to_json
-
-    time = DateTime.strptime(data.item.ts,'%s')
-
-    name = msgUser['user']['name']
-
-    msgLines = []
-    msgLines << MESSAGE_BREAK
-    msgLines << "Who  : #{name}"
-    msgLines << "When : #{time.strftime('%c')}"
-    msgLines << "Where: ##{channelName}"
-    msgLines << MESSAGE_BREAK
-    msgLines.push *msg.text.split('\n') # newlines need to be split to let us reverse later
-    msgLines << MESSAGE_BREAK
 
     client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
 
-    msgPrinted = send_message_to_printer msgLines
+    event = SlackEvent.new File.join(__dir__, 'slackMessage.erb')
+    event.name = msgUser['user']['name']
+    event.time = DateTime.strptime(data.item.ts,'%s')
+    event.channelName = channelInfo['channel']['name_normalized']
+    event.msg = msg
 
-    puts 'Made the following message permanant...'
-    puts msgPrinted
+
+    @printer = Escpos::Printer.new
+    @printer.write event.render
+
+
+    if msg['attachments']
+      image= get_image( get_image_path(msg['attachments'].first ) )
+      @printer.write image.to_escpos
+    end
+
+    send_data_to_printer @printer.to_escpos
   end
 
-  def send_message_to_printer(msg, options = {})
-    default_options = {
-      :feed        => 3,
-      :orientation => 'inverted',
-      :width       => 32,
+  def get_image_path(attached)
+    image_path=nil
+    # Web links do this
+    image_path = attached['image_url'] unless attached['image_url'].nil?
+    # YouTube does this
+    image_path = attached['thumb_url'] unless attached['thumb_url'].nil?
+
+    image_path
+  end
+
+  def get_image(image_path)
+    puts "Trying to print image from #{image_path}"
+    return if image_path.nil?
+    #image = Escpos::Image.new image_path
+    # to use automatic conversion to monochrome format (requires mini_magick gem) use:
+    image = Escpos::Image.new image_path, {
+      convert_to_monochrome: true,
+      dither: true, # the default
+      extent: true, # the default
     }
-    options = options.reverse_merge(default_options)
 
-    # Word-Wrap time
-    # https://www.safaribooksonline.com/library/view/ruby-cookbook/0596523696/ch01s15.html
-
-    if msg.is_a? Array
-      msg = msg.join("\n")
-    end
+    image
+  end
 
 
-    # Word-Wrap time
-    # https://www.safaribooksonline.com/library/view/ruby-cookbook/0596523696/ch01s15.html
-    msg = msg.gsub(/(.{1,#{options[:width]}})(\s+|\Z)/, "\\1\n")
+  def send_data_to_printer(data)
 
-    # Life got flipped, turned upside-down
-    if options[:orientation] == 'inverted'
-      msg = msg.split("\n").reverse.join("\n")
-    end
-
-    # Could use a long-lived socket here, but dont plan to print
-    # _alot_ of things, so new connections are ok
     fd = IO.sysopen PRINTER_TTY, "w"
     ios = IO.new(fd, "w")
-    ios.puts msg
-
-    # Theres a feed action, but why bother
-    options[:feed].times do ios.puts "\n" end
-
+    ios.puts data
     # Printing Handled
     ios.close
-
-    # return the msg
-    msg
   end
 
 end
