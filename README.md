@@ -29,9 +29,9 @@ for your team.
     - Currently includes <@U4X4xxxx> strings which isn't so nice
 - [ ] Print avatar/emoji characters inline in message
 - [ ] Show images for
-    - [ ] Giphy embeds (Currently blank as no 'message' included)
-    - [ ] Uploaded images/photos
-    - [ ] Unfurled links - Youtube/websites etc
+    - [x] Giphy embeds - First frame, sometimes breaks
+    - [ ] Uploaded images/photos - Files dont get associated with channels for some reason
+    - [x] Unfurled links - Youtube/websites etc
 - [ ] Better installation solution using bundler or similar
 
 
