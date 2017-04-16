@@ -204,7 +204,7 @@ class PrinterBot
   end
 
   def replace_mentions(msg_text)
-    msg_text.gsub(/\<(.*)\>/){ |id|
+    msg_text.gsub(/\<([^\>]*)\>/){ |id|
        # Might fail if user can't be found.. (ie is new since app started)
         ux = get_user id[2..-2]
         '@' + ux['name']
