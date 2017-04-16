@@ -22,8 +22,8 @@ for your team.
 
 - [x] Print message based on emoji event
 - [ ] Have some basic interaction to help people find out more about Tilly
-- [ ] Write better documentation about the build
-    - (Tilly - The Slack Printer)[https://hackaday.io/project/21191-tilly-the-slack-printer]
+- [x] Write better documentation about the build
+    - [Tilly - The Slack Printer](https://hackaday.io/project/21191-tilly-the-slack-printer)
 - [ ] Support command line configuration for printer endpoint/token
 - [ ] Include real usernames when message includes @mentions
     - Currently includes <@U4X4xxxx> strings which isn't so nice
