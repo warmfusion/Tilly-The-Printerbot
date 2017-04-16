@@ -26,6 +26,8 @@ MESSAGE_BREAK="---"
 UPSIDE_DOWN=true
 PRINTER_CHAR_WIDTH= 32
 
+# Set to true to stop sending to printer - useful for debuggin
+DEBUG_NO_PRINT=false
 
 class PrinterBot
 
@@ -59,7 +61,14 @@ class PrinterBot
   attr_accessor :webClient
   attr_accessor :log
 
+
   def start!()
+
+    log.info 'Retrieving list of users..'
+    user_resp = webClient.users_list
+    @users = user_resp['members']
+    log.debug "Loaded #{@users.length} user objects into memory"
+
     log.info 'Preparing real-time client event handling...'
     client.on :hello do
       log.info "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
@@ -90,11 +99,12 @@ class PrinterBot
     log.debug data.to_json
 
     log.debug "Getting message information for item"
-    msg = get_message(data)
+    msg         = get_message(data)
+    msg['text'] = replace_mentions(msg['text'])
     log.debug msg.to_json
 
     log.debug "Getting user information for: #{msg['user']}"
-    msgUser     = webClient.users_info user: msg['user']
+    msgUser     = get_user msg['user']
     log.debug msgUser.to_json
 
 
@@ -113,7 +123,7 @@ class PrinterBot
 
     log.debug "Building SlackEvent report object"
     event = SlackEvent.new File.join(__dir__, 'slackMessage.erb')
-    event.name = msgUser['user']['name']
+    event.name = msgUser['name']
     event.time = DateTime.strptime(data.item.ts,'%s')
     event.channelName = channelInfo['name_normalized'] unless channelInfo.nil?
     event.msg = msg
@@ -134,6 +144,7 @@ class PrinterBot
       @printer.write image.to_escpos unless image.nil?
     end
 
+    log.debug event.render
     @printer.write event.render
     send_data_to_printer @printer.to_escpos
 
@@ -186,6 +197,20 @@ class PrinterBot
     end
     return nil
   end
+
+  def get_user(user_id)
+    log.debug "Locating User object for #{user_id}"
+    @users.find{ |u| u['id'] == user_id }
+  end
+
+  def replace_mentions(msg_text)
+    msg_text.gsub(/\<(.*)\>/){ |id|
+       # Might fail if user can't be found.. (ie is new since app started)
+        ux = get_user id[2..-2]
+        '@' + ux['name']
+      }
+  end
+
   def get_image_path(attached)
     image_path=nil
     # Web links do this
@@ -215,6 +240,9 @@ class PrinterBot
 
 
   def send_data_to_printer(data)
+    # Bypass printing to save on paper
+    return  if DEBUG_NO_PRINT
+
     fd = IO.sysopen PRINTER_TTY, "w"
     ios = IO.new(fd, "w")
     ios.puts data

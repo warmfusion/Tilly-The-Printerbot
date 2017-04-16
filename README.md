@@ -25,8 +25,8 @@ for your team.
 - [x] Write better documentation about the build
     - [Tilly - The Slack Printer](https://hackaday.io/project/21191-tilly-the-slack-printer)
 - [ ] Support command line configuration for printer endpoint/token
-- [ ] Include real usernames when message includes @mentions
-    - Currently includes <@U4X4xxxx> strings which isn't so nice
+- [x] Include real usernames when message includes @mentions
+    - Some nasty regex and user-directory lookups required; might fail on long-running app
 - [ ] Print avatar/emoji characters inline in message
 - [ ] Show images for
     - [x] Giphy embeds - First frame, sometimes breaks
