@@ -9,6 +9,8 @@ require 'escpos'
 require 'escpos/image'
 require 'chunky_png'
 
+require 'logger'
+
 
 if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
   puts "SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions "
@@ -26,6 +28,10 @@ PRINTER_CHAR_WIDTH= 32
 
 
 class PrinterBot
+
+
+  class UnableToDetectChannelType < StandardError
+  end
 
   class SlackEvent < Escpos::Report
     attr_accessor :name
@@ -51,11 +57,12 @@ class PrinterBot
 
   attr_accessor :client
   attr_accessor :webClient
+  attr_accessor :log
 
   def start!()
-    puts 'Preparing real-time client event handling...'
+    log.info 'Preparing real-time client event handling...'
     client.on :hello do
-      puts "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
+      log.info "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
     end
 
     client.on :reaction_added do |data|
@@ -64,35 +71,36 @@ class PrinterBot
 
 
     client.on :close do |_data|
-      puts "Client is about to disconnect"
+      log.info "Client is about to disconnect"
     end
 
     client.on :closed do |_data|
-      puts "Client has disconnected successfully!"
+      log.info "Client has disconnected successfully!"
     end
 
     # start the real-time client to get events
-    puts 'Starting real-time client...'
+    log.debug 'Starting real-time client...'
     client.start!
   end
 
   def process_reaction_event(data)
     # I'm only interested in the :printer: reaction
     return unless data['reaction'] == 'printer'
+    log.debug "Reaction event occurred for :printer:..."
+    log.debug data.to_json
 
-    puts data.to_json
-  # has_more=true, messages=[#<Slack::Messages::Message reactions=#<Hashie::Array [#<Slack::Messages::Message count=1 name="printer" users=#<Hashie::Array ["U02NNVATL"]>>]> text="This is a much longer test to see if this can actually work, and what happens when <@U02NNVATL> is mentioned as part of the message, perhaps even <@U4X4VNPAP> as well… how curious" ts="1491855771.754467" type="message" user="U02NNVATL">], ok=true
+    log.debug "Getting message information for item"
+    msg = get_message(data)
+    log.debug msg.to_json
 
-    puts "Finding associated item using channel.history query: channel #{data.item.channel}, latest: #{data.item.ts} inclusive: true, count: 1"
-    history = webClient.channels_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
-
-    puts history.to_json
-
-    msg = history.messages.first
-    puts msg.to_json
-
+    log.debug "Getting user information for: #{msg['user']}"
     msgUser     = webClient.users_info user: msg['user']
-    channelInfo = webClient.channels_info( channel: data.item.channel )
+    log.debug msgUser.to_json
+
+
+    log.debug "Getting channel information for #{data.item.channel}"
+    channelInfo = get_channel(data)
+    log.debug channelInfo.to_json
 
 #    # FIXME This feels inelegant as a method of finding the right reaction and count
 #    unless msg['reactions'].select{|x| x.name == 'printer' && x.count == 1}.length == 1
@@ -100,27 +108,30 @@ class PrinterBot
 #      return
 #    end
 
-
+    log.debug "Sending ack to user that we're going to try and print"
     client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
 
+    log.debug "Building SlackEvent report object"
     event = SlackEvent.new File.join(__dir__, 'slackMessage.erb')
     event.name = msgUser['user']['name']
     event.time = DateTime.strptime(data.item.ts,'%s')
-    event.channelName = channelInfo['channel']['name_normalized']
+    event.channelName = channelInfo['name_normalized'] unless channelInfo.nil?
     event.msg = msg
 
-
+    log.info "Sending event to printer :: ##{event.channelName} - #{event.name} - #{event.time}"
     @printer = Escpos::Printer.new
     if UPSIDE_DOWN
       # https://cdn-shop.adafruit.com/datasheets/CSN-A2+User+Manual.pdf
-      puts 'Setting printer to upsidedown mode...'
+      log.debug 'Setting printer to upsidedown mode...'
       @printer.write Escpos.sequence( [ 0x1B, 0x7B, 0x01 ] )
     end
 
     # FIXME: This assumes upside down is set as images come _after_ the text
     if msg['attachments']
+      log.info "Item has attachment - trying to print image where exists"
       image= get_image( get_image_path(msg['attachments'].first ) )
-      @printer.write image.to_escpos
+      log.debug "Image returned: #{image}"
+      @printer.write image.to_escpos unless image.nil?
     end
 
     @printer.write event.render
@@ -128,8 +139,53 @@ class PrinterBot
 
     # Feed feed feed
     send_data_to_printer "\n\n\n"
+    log.info "Print Reaction Completed"
   end
 
+  def get_message(data)
+    #Public rooms, Private Rooms and Direct Messages each have their own API endpoints
+    channel_first_letter = data.item.channel[0]
+
+    history = nil
+    case channel_first_letter
+    when 'C' #Public Channel
+      log.debug "Checking public channels history for item"
+      history = webClient.channels_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+    when 'D'
+      log.debug "Checking direct message history for item"
+      history = webClient.im_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+    when 'G'
+      log.debug "Checking group history for item"
+      history = webClient.groups_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+    else
+      log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
+      raise UnableToDetectChannelType "Did not recognise Channel Short Ident: #{data.item.channel}"
+    end
+
+    log.debug  history.to_json
+    history.messages.first unless history.messages.nil?
+  end
+
+
+  def get_channel(data)
+    channel_first_letter = data.item.channel[0]
+
+    case channel_first_letter
+    when 'C' #Public Channel
+      log.debug "Checking public channels history for item"
+      return webClient.channels_info( channel: data.item.channel )['channel']
+    when 'D'
+      log.debug "No Channel information exists for direct messages"
+      return {}
+    when 'G'
+      log.debug "Checking group history for item"
+      return webClient.groups_info( channel: data.item.channel )['group']
+    else
+      log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
+      raise UnableToDetectChannelType "Did not recognise Channel Short Ident: #{data.item.channel}"
+    end
+    return nil
+  end
   def get_image_path(attached)
     image_path=nil
     # Web links do this
@@ -141,7 +197,7 @@ class PrinterBot
   end
 
   def get_image(image_path)
-    puts "Trying to print image from #{image_path}"
+    log.info "Trying to print image from #{image_path}"
     return if image_path.nil?
     rotate = 0
     rotate = 180 if UPSIDE_DOWN
@@ -183,9 +239,12 @@ Slack::Web.configure do |config|
   fail 'Missing ENV[SLACK_AUTH_TOKEN]!' unless config.token
 end
 
+log = Logger.new(STDOUT)
+log.level = Logger::DEBUG
 
 printerBot = PrinterBot.new
 printerBot.client = Slack::RealTime::Client.new
 printerBot.webClient = Slack::Web::Client.new
+printerBot.log = log
 
 printerBot.start!
