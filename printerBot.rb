@@ -21,6 +21,9 @@ WEB_TOKEN = ENV['SLACK_AUTH_TOKEN']
 PRINTER_TTY="/dev/ttyAMA0"
 MESSAGE_BREAK="---"
 
+UPSIDE_DOWN=true
+PRINTER_CHAR_WIDTH= 32
+
 
 class PrinterBot
 
@@ -29,6 +32,17 @@ class PrinterBot
     attr_accessor :channelName
     attr_accessor :time
     attr_accessor :msg
+
+    def render()
+      text = super
+      # Word-Wrap time - Ensure fits to page
+      # https://www.safaribooksonline.com/library/view/ruby-cookbook/0596523696/ch01s15.html
+      text = text.gsub(/(.{1,#{PRINTER_CHAR_WIDTH}})(\s+|\Z)/, "\\1\n")
+      if UPSIDE_DOWN
+        text = text.split("\n").reverse().join("\n")
+      end
+      text
+    end
   end
   # For boring reasons, we need to use two different Slack clients to operate
   # 1. The RealTime client is for obtaining Reaction events without needing to run
@@ -37,7 +51,6 @@ class PrinterBot
 
   attr_accessor :client
   attr_accessor :webClient
-
 
   def start!()
     puts 'Preparing real-time client event handling...'
@@ -98,15 +111,23 @@ class PrinterBot
 
 
     @printer = Escpos::Printer.new
-    @printer.write event.render
+    if UPSIDE_DOWN
+      # https://cdn-shop.adafruit.com/datasheets/CSN-A2+User+Manual.pdf
+      puts 'Setting printer to upsidedown mode...'
+      @printer.write Escpos.sequence( [ 0x1B, 0x7B, 0x01 ] )
+    end
 
-
+    # FIXME: This assumes upside down is set as images come _after_ the text
     if msg['attachments']
       image= get_image( get_image_path(msg['attachments'].first ) )
       @printer.write image.to_escpos
     end
 
+    @printer.write event.render
     send_data_to_printer @printer.to_escpos
+
+    # Feed feed feed
+    send_data_to_printer "\n\n\n"
   end
 
   def get_image_path(attached)
@@ -122,20 +143,22 @@ class PrinterBot
   def get_image(image_path)
     puts "Trying to print image from #{image_path}"
     return if image_path.nil?
+    rotate = 0
+    rotate = 180 if UPSIDE_DOWN
     #image = Escpos::Image.new image_path
     # to use automatic conversion to monochrome format (requires mini_magick gem) use:
     image = Escpos::Image.new image_path, {
+      rotate: rotate,
+      resize: '360x360',
       convert_to_monochrome: true,
       dither: true, # the default
       extent: true, # the default
     }
-
     image
   end
 
 
   def send_data_to_printer(data)
-
     fd = IO.sysopen PRINTER_TTY, "w"
     ios = IO.new(fd, "w")
     ios.puts data
