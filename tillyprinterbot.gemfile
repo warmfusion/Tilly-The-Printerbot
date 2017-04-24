@@ -3,6 +3,6 @@ gem 'ruby-slack-client'
 gem 'faye-websocket'
 
 # For The Image Processing
-gem 'escpos-image'
+gem 'escpos-image' '>= 0.0.3' # Needs https://github.com/warmfusion/escpos-image/pull/1
 gem 'mini_magick'
 gem 'chunky_png'
