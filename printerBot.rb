@@ -29,17 +29,20 @@ PRINTER_CHAR_WIDTH= 32
 # Set to true to stop sending to printer - useful for debuggin
 DEBUG_NO_PRINT=false
 
+
+class UnableToDetectChannelType < StandardError
+end
+
 class PrinterBot
 
 
-  class UnableToDetectChannelType < StandardError
-  end
 
   class SlackEvent < Escpos::Report
     attr_accessor :name
     attr_accessor :channelName
     attr_accessor :time
     attr_accessor :msg
+    attr_accessor :requester
 
     def render()
       text = super
@@ -64,6 +67,8 @@ class PrinterBot
 
   def start!()
 
+    webClient.chat_postMessage channel: '#tillys', text: "Hello again... I'm just waking up, give me a moment."
+
     log.info 'Retrieving list of users..'
     user_resp = webClient.users_list
     @users = user_resp['members']
@@ -72,14 +77,24 @@ class PrinterBot
     log.info 'Preparing real-time client event handling...'
     client.on :hello do
       log.info "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
+      webClient.chat_postMessage channel: '#tillys', text: "and I'm back and ready to go!"
+
     end
 
     client.on :reaction_added do |data|
-      process_reaction_event(data)
+      begin
+        process_reaction_event(data)
+      rescue Exception => e
+        log.error e
+        webClient.chat_postMessage channel: '#tillys', text: "Oh No! I've had an error... Help help!"
+        webClient.chat_postMessage channel: '#tillys', text: "```#{e.message}\n#{e.backtrace.join("\n")}```"
+      end
     end
 
 
     client.on :close do |_data|
+      webClient.chat_postMessage channel: '#tillys', text: "Goodbye! I'm turning off for a while :zzz:"
+
       log.info "Client is about to disconnect"
     end
 
@@ -99,12 +114,25 @@ class PrinterBot
     log.debug data.to_json
 
     log.debug "Getting message information for item"
-    msg         = get_message(data)
+
+    if data.item.type == 'file'
+      log.warn "User tried to react to attached file - cant do that See Issue #2"
+    end
+
+    msg = get_message(data)
     msg['text'] = replace_mentions(msg['text'])
     log.debug msg.to_json
 
-    log.debug "Getting user information for: #{msg['user']}"
-    msgUser     = get_user msg['user']
+    if msg.type == 'message'
+      if msg.subtype == 'bot_message'
+         userID = msg.username
+      else
+        userID = msg.user
+      end
+    end
+
+    log.debug "Getting user information for: #{userID}"
+    msgUser   = get_user userID
     log.debug msgUser.to_json
 
 
@@ -118,8 +146,11 @@ class PrinterBot
 #      return
 #    end
 
-    log.debug "Sending ack to user that we're going to try and print"
-    client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
+    # Files dont have channels... so cant print response... bah
+    unless data['item'].channel.nil?
+      log.debug "Sending ack to user that we're going to try and print"
+      client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
+    end
 
     log.debug "Building SlackEvent report object"
     event = SlackEvent.new File.join(__dir__, 'slackMessage.erb')
@@ -127,6 +158,7 @@ class PrinterBot
     event.time = DateTime.strptime(data.item.ts,'%s')
     event.channelName = channelInfo['name_normalized'] unless channelInfo.nil?
     event.msg = msg
+    event.requester = get_user data.user
 
     log.info "Sending event to printer :: ##{event.channelName} - #{event.name} - #{event.time}"
     @printer = Escpos::Printer.new
@@ -154,6 +186,12 @@ class PrinterBot
   end
 
   def get_message(data)
+
+    if data.item.channel.nil?
+      log.warn "Couldn't find Channel for #{data.item} - Aborting"
+      raise UnableToDetectChannelType, "Could not find channel in data object: #{data.item}"
+    end
+
     #Public rooms, Private Rooms and Direct Messages each have their own API endpoints
     channel_first_letter = data.item.channel[0]
 
@@ -170,7 +208,7 @@ class PrinterBot
       history = webClient.groups_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
     else
       log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
-      raise UnableToDetectChannelType "Did not recognise Channel Short Ident: #{data.item.channel}"
+      raise UnableToDetectChannelType, "Did not recognise Channel Short Ident: #{data.item.channel}"
     end
 
     log.debug  history.to_json
@@ -179,6 +217,11 @@ class PrinterBot
 
 
   def get_channel(data)
+
+    if data.item.channel.nil?
+      return "#NoChannel"
+    end
+
     channel_first_letter = data.item.channel[0]
 
     case channel_first_letter
@@ -193,7 +236,7 @@ class PrinterBot
       return webClient.groups_info( channel: data.item.channel )['group']
     else
       log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
-      raise UnableToDetectChannelType "Did not recognise Channel Short Ident: #{data.item.channel}"
+      raise UnableToDetectChannelType, "Did not recognise Channel Short Ident: #{data.item.channel}"
     end
     return nil
   end
@@ -204,9 +247,10 @@ class PrinterBot
   end
 
   def replace_mentions(msg_text)
-    msg_text.gsub(/\<([^\>]*)\>/){ |id|
+    msg_text.gsub(/\<@([^\>]*)\>/){ |id|
        # Might fail if user can't be found.. (ie is new since app started)
         ux = get_user id[2..-2]
+        log.debug "Foudn user in msg: #{id}"
         '@' + ux['name']
       }
   end
