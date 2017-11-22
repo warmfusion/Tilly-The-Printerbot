@@ -10,6 +10,11 @@ require 'escpos/image'
 require 'chunky_png'
 
 require 'logger'
+require 'socket'
+
+def local_ip
+  Socket.ip_address_list.detect(&:ipv4_private?).ip_address
+end
 
 
 if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
@@ -34,9 +39,6 @@ class UnableToDetectChannelType < StandardError
 end
 
 class PrinterBot
-
-
-
   class SlackEvent < Escpos::Report
     attr_accessor :name
     attr_accessor :channelName
@@ -66,35 +68,30 @@ class PrinterBot
 
 
   def start!()
+    send_message "Hello again... I'm just waking up, give me a moment. My Local IP is _#{local_ip}_"
 
-    webClient.chat_postMessage channel: '#tillys', text: "Hello again... I'm just waking up, give me a moment."
-
-    log.info 'Retrieving list of users..'
+    send_message 'Retrieving list of users..'
     user_resp = webClient.users_list
     @users = user_resp['members']
     log.debug "Loaded #{@users.length} user objects into memory"
 
-    log.info 'Preparing real-time client event handling...'
+    send_message 'Preparing real-time client event handling...'
     client.on :hello do
-      log.info "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
-      webClient.chat_postMessage channel: '#tillys', text: "and I'm back and ready to go!"
-
+      send_message "Successfully connected, welcome '#{client.self.name}' to the '#{client.team.name}' team at https://#{client.team.domain}.slack.com."
     end
 
     client.on :reaction_added do |data|
       begin
         process_reaction_event(data)
-      rescue Exception => e
+      rescue StandardError => e
         log.error e
-        webClient.chat_postMessage channel: '#tillys', text: "Oh No! I've had an error... Help help!"
-        webClient.chat_postMessage channel: '#tillys', text: "```#{e.message}\n#{e.backtrace.join("\n")}```"
+        send_message "Oh No! I've had an error... Help help!"
+        send_message "```#{e.message}\n#{e.backtrace.join("\n")}```"
       end
     end
 
-
     client.on :close do |_data|
-      webClient.chat_postMessage channel: '#tillys', text: "Goodbye! I'm turning off for a while :zzz:"
-
+      send_message "Goodbye! I'm turning off for a while :zzz:"
       log.info "Client is about to disconnect"
     end
 
@@ -103,7 +100,7 @@ class PrinterBot
     end
 
     # start the real-time client to get events
-    log.debug 'Starting real-time client...'
+    send_message 'Starting real-time client...'
     client.start!
   end
 
@@ -114,10 +111,6 @@ class PrinterBot
     log.debug data.to_json
 
     log.debug "Getting message information for item"
-
-    if data.item.type == 'file'
-      log.warn "User tried to react to attached file - cant do that See Issue #2"
-    end
 
     msg = get_message(data)
     msg['text'] = replace_mentions(msg['text'])
@@ -147,6 +140,11 @@ class PrinterBot
 #    end
 
     # Files dont have channels... so cant print response... bah
+    if data.item.type == 'file'
+      log.warn "User tried to react to attached file - cant do that See Issue #2"
+    end
+
+
     unless data['item'].channel.nil?
       log.debug "Sending ack to user that we're going to try and print"
       client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
@@ -186,7 +184,6 @@ class PrinterBot
   end
 
   def get_message(data)
-
     if data.item.channel.nil?
       log.warn "Couldn't find Channel for #{data.item} - Aborting"
       raise UnableToDetectChannelType, "Could not find channel in data object: #{data.item}"
@@ -217,9 +214,8 @@ class PrinterBot
 
 
   def get_channel(data)
-
     if data.item.channel.nil?
-      return "#NoChannel"
+      return '#NoChannel'
     end
 
     channel_first_letter = data.item.channel[0]
@@ -294,6 +290,10 @@ class PrinterBot
     ios.close
   end
 
+  def send_message(msg, channel = '#tillys')
+    log.info "Sending to #{channel} :: #{msg}"
+    webClient.chat_postMessage channel: channel, text: msg
+  end
 end
 
 # Prepare the clients
