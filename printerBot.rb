@@ -16,7 +16,6 @@ def local_ip
   Socket.ip_address_list.detect(&:ipv4_private?).ip_address
 end
 
-
 if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
   puts 'SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions '
   puts '   - https://github.com/warmfusion/Tilly-The-Printerbot/'
@@ -34,7 +33,6 @@ PRINTER_CHAR_WIDTH = 32
 # Set to true to stop sending to printer - useful for debuggin
 DEBUG_NO_PRINT = false
 
-
 class UnableToDetectChannelType < StandardError
 end
 
@@ -51,7 +49,7 @@ class PrinterBot
       # Word-Wrap time - Ensure fits to page
       # https://www.safaribooksonline.com/library/view/ruby-cookbook/0596523696/ch01s15.html
       text = text.gsub(/(.{1,#{PRINTER_CHAR_WIDTH}})(\s+|\Z)/, "\\1\n")
-      text = text.split("\n").reverse().join("\n") if UPSIDE_DOWN
+      text = text.split("\n").reverse.join("\n") if UPSIDE_DOWN
       text
     end
   end
@@ -63,7 +61,6 @@ class PrinterBot
   attr_accessor :client
   attr_accessor :webClient
   attr_accessor :log
-
 
   def start!
     send_message "Hello again... I'm just waking up, give me a moment. My Local IP is _#{local_ip}_"
@@ -97,8 +94,9 @@ class PrinterBot
       log.info 'Client has disconnected successfully!'
     end
 
+    send_message 'Everything looks good here... invite me into channels and react to messages with :printer: and i\'ll print them out for you :smile:'
     # start the real-time client to get events
-    send_message 'Starting real-time client...'
+    log.info 'Starting real-time client...'
     client.start!
   end
 
@@ -116,9 +114,9 @@ class PrinterBot
 
     if msg.type == 'message'
       userID = if msg.subtype == 'bot_message'
-        msg.username
-      else
-        msg.user
+                 msg.username
+               else
+                 msg.user
                end
     end
 
@@ -126,22 +124,25 @@ class PrinterBot
     msgUser = get_user userID
     log.debug msgUser.to_json
 
+    if msgUser.nil?
+      msgUser = []
+      msgUser['name'] = userID
+    end
 
     log.debug "Getting channel information for #{data.item.channel}"
     channelInfo = get_channel(data)
     log.debug channelInfo.to_json
 
-#    # FIXME This feels inelegant as a method of finding the right reaction and count
-#    unless msg['reactions'].select{|x| x.name == 'printer' && x.count == 1}.length == 1
-#      puts "Already handled print for this message... ignoring"
-#      return
+    #    # FIXME This feels inelegant as a method of finding the right reaction and count
+    #    unless msg['reactions'].select{|x| x.name == 'printer' && x.count == 1}.length == 1
+    #      puts "Already handled print for this message... ignoring"
+    #      return
     #    end
 
     # Files dont have channels... so cant print response... bah
     if data.item.type == 'file'
       log.warn 'User tried to react to attached file - cant do that See Issue #2'
     end
-
 
     unless data['item'].channel.nil?
       log.debug "Sending ack to user that we're going to try and print"
@@ -229,7 +230,6 @@ class PrinterBot
       log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
       raise UnableToDetectChannelType, "Did not recognise Channel Short Ident: #{data.item.channel}"
     end
-    nil
   end
 
   def get_user(user_id)
@@ -238,12 +238,12 @@ class PrinterBot
   end
 
   def replace_mentions(msg_text)
-    msg_text.gsub(/\<@([^\>]*)\>/) { |id|
-        # Might fail if user can't be found.. (ie is new since app started)
-        ux = get_user id[2..-2]
-        log.debug "Foudn user in msg: #{id}"
-        '@' + ux['name']
-    }
+    msg_text.gsub(/\<@([^\>]*)\>/) do |id|
+      # Might fail if user can't be found.. (ie is new since app started)
+      ux = get_user id[2..-2]
+      log.debug "Found user in msg: #{id}"
+      '@' + ux['name']
+    end
   end
 
   def get_image_path(attached)
@@ -264,11 +264,11 @@ class PrinterBot
     # image = Escpos::Image.new image_path
     # to use automatic conversion to monochrome format (requires mini_magick gem) use:
     image = Escpos::Image.new image_path,
-      rotate: rotate,
-      resize: '360x360',
-      convert_to_monochrome: true,
-      dither: true, # the default
-      extent: true # the default
+                              rotate: rotate,
+                              resize: '360x360',
+                              convert_to_monochrome: true,
+                              dither: true, # the default
+                              extent: true # the default
     image
   end
 
