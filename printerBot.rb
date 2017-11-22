@@ -125,7 +125,7 @@ class PrinterBot
     log.debug msgUser.to_json
 
     if msgUser.nil?
-      msgUser = []
+      msgUser = {}
       msgUser['name'] = userID
     end
 
