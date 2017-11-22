@@ -268,8 +268,7 @@ class PrinterBot
       resize: '360x360',
       convert_to_monochrome: true,
       dither: true, # the default
-      extent: true, # the default
-
+      extent: true # the default
     image
   end
 
