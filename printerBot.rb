@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'slack-ruby-client'
-#require 'celluloid-io'
+# require 'celluloid-io'
 require 'json'
 require 'date'
 
@@ -18,21 +18,21 @@ end
 
 
 if ENV['SLACK_AUTH_TOKEN'].nil? || ENV['SLACK_AUTH_TOKEN'] == 'NOT_SET_YET'
-  puts "SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions "
-  puts "   - https://github.com/warmfusion/Tilly-The-Printerbot/"
+  puts 'SLACK_AUTH_TOKEN environment variable missing - Please check readme for installation instructions '
+  puts '   - https://github.com/warmfusion/Tilly-The-Printerbot/'
   exit 1
 end
 
 REALTIME_TOKEN = ENV['SLACK_AUTH_TOKEN']
 WEB_TOKEN = ENV['SLACK_AUTH_TOKEN']
-PRINTER_TTY="/dev/ttyAMA0"
-MESSAGE_BREAK="---"
+PRINTER_TTY = '/dev/ttyAMA0'.freeze
+MESSAGE_BREAK = '---'.freeze
 
-UPSIDE_DOWN=true
-PRINTER_CHAR_WIDTH= 32
+UPSIDE_DOWN = true
+PRINTER_CHAR_WIDTH = 32
 
 # Set to true to stop sending to printer - useful for debuggin
-DEBUG_NO_PRINT=false
+DEBUG_NO_PRINT = false
 
 
 class UnableToDetectChannelType < StandardError
@@ -46,14 +46,12 @@ class PrinterBot
     attr_accessor :msg
     attr_accessor :requester
 
-    def render()
+    def render
       text = super
       # Word-Wrap time - Ensure fits to page
       # https://www.safaribooksonline.com/library/view/ruby-cookbook/0596523696/ch01s15.html
       text = text.gsub(/(.{1,#{PRINTER_CHAR_WIDTH}})(\s+|\Z)/, "\\1\n")
-      if UPSIDE_DOWN
-        text = text.split("\n").reverse().join("\n")
-      end
+      text = text.split("\n").reverse().join("\n") if UPSIDE_DOWN
       text
     end
   end
@@ -67,7 +65,7 @@ class PrinterBot
   attr_accessor :log
 
 
-  def start!()
+  def start!
     send_message "Hello again... I'm just waking up, give me a moment. My Local IP is _#{local_ip}_"
 
     send_message 'Retrieving list of users..'
@@ -92,11 +90,11 @@ class PrinterBot
 
     client.on :close do |_data|
       send_message "Goodbye! I'm turning off for a while :zzz:"
-      log.info "Client is about to disconnect"
+      log.info 'Client is about to disconnect'
     end
 
     client.on :closed do |_data|
-      log.info "Client has disconnected successfully!"
+      log.info 'Client has disconnected successfully!'
     end
 
     # start the real-time client to get events
@@ -107,25 +105,25 @@ class PrinterBot
   def process_reaction_event(data)
     # I'm only interested in the :printer: reaction
     return unless data['reaction'] == 'printer'
-    log.debug "Reaction event occurred for :printer:..."
+    log.debug 'Reaction event occurred for :printer:...'
     log.debug data.to_json
 
-    log.debug "Getting message information for item"
+    log.debug 'Getting message information for item'
 
     msg = get_message(data)
     msg['text'] = replace_mentions(msg['text'])
     log.debug msg.to_json
 
     if msg.type == 'message'
-      if msg.subtype == 'bot_message'
-         userID = msg.username
+      userID = if msg.subtype == 'bot_message'
+        msg.username
       else
-        userID = msg.user
-      end
+        msg.user
+               end
     end
 
     log.debug "Getting user information for: #{userID}"
-    msgUser   = get_user userID
+    msgUser = get_user userID
     log.debug msgUser.to_json
 
 
@@ -137,11 +135,11 @@ class PrinterBot
 #    unless msg['reactions'].select{|x| x.name == 'printer' && x.count == 1}.length == 1
 #      puts "Already handled print for this message... ignoring"
 #      return
-#    end
+    #    end
 
     # Files dont have channels... so cant print response... bah
     if data.item.type == 'file'
-      log.warn "User tried to react to attached file - cant do that See Issue #2"
+      log.warn 'User tried to react to attached file - cant do that See Issue #2'
     end
 
 
@@ -150,10 +148,10 @@ class PrinterBot
       client.message channel: data['item'].channel, text: "Ok <@#{data.user}>... I'm trying to print that for you..."
     end
 
-    log.debug "Building SlackEvent report object"
+    log.debug 'Building SlackEvent report object'
     event = SlackEvent.new File.join(__dir__, 'slackMessage.erb')
     event.name = msgUser['name']
-    event.time = DateTime.strptime(data.item.ts,'%s')
+    event.time = DateTime.strptime(data.item.ts, '%s')
     event.channelName = channelInfo['name_normalized'] unless channelInfo.nil?
     event.msg = msg
     event.requester = get_user data.user
@@ -163,13 +161,13 @@ class PrinterBot
     if UPSIDE_DOWN
       # https://cdn-shop.adafruit.com/datasheets/CSN-A2+User+Manual.pdf
       log.debug 'Setting printer to upsidedown mode...'
-      @printer.write Escpos.sequence( [ 0x1B, 0x7B, 0x01 ] )
+      @printer.write Escpos.sequence([0x1B, 0x7B, 0x01])
     end
 
     # FIXME: This assumes upside down is set as images come _after_ the text
     if msg['attachments']
-      log.info "Item has attachment - trying to print image where exists"
-      image= get_image( get_image_path(msg['attachments'].first ) )
+      log.info 'Item has attachment - trying to print image where exists'
+      image = get_image(get_image_path(msg['attachments'].first))
       log.debug "Image returned: #{image}"
       @printer.write image.to_escpos unless image.nil?
     end
@@ -180,7 +178,7 @@ class PrinterBot
 
     # Feed feed feed
     send_data_to_printer "\n\n\n"
-    log.info "Print Reaction Completed"
+    log.info 'Print Reaction Completed'
   end
 
   def get_message(data)
@@ -189,70 +187,67 @@ class PrinterBot
       raise UnableToDetectChannelType, "Could not find channel in data object: #{data.item}"
     end
 
-    #Public rooms, Private Rooms and Direct Messages each have their own API endpoints
+    # Public rooms, Private Rooms and Direct Messages each have their own API endpoints
     channel_first_letter = data.item.channel[0]
 
     history = nil
     case channel_first_letter
-    when 'C' #Public Channel
-      log.debug "Checking public channels history for item"
-      history = webClient.channels_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+    when 'C' # Public Channel
+      log.debug 'Checking public channels history for item'
+      history = webClient.channels_history(channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1)
     when 'D'
-      log.debug "Checking direct message history for item"
-      history = webClient.im_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+      log.debug 'Checking direct message history for item'
+      history = webClient.im_history(channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1)
     when 'G'
-      log.debug "Checking group history for item"
-      history = webClient.groups_history( channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1 )
+      log.debug 'Checking group history for item'
+      history = webClient.groups_history(channel: data.item.channel, latest: data.item.ts, inclusive: 'true', count: 1)
     else
       log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
       raise UnableToDetectChannelType, "Did not recognise Channel Short Ident: #{data.item.channel}"
     end
 
-    log.debug  history.to_json
+    log.debug history.to_json
     history.messages.first unless history.messages.nil?
   end
 
-
   def get_channel(data)
-    if data.item.channel.nil?
-      return '#NoChannel'
-    end
+    return '#NoChannel' if data.item.channel.nil?
 
     channel_first_letter = data.item.channel[0]
 
     case channel_first_letter
-    when 'C' #Public Channel
-      log.debug "Checking public channels history for item"
-      return webClient.channels_info( channel: data.item.channel )['channel']
+    when 'C' # Public Channel
+      log.debug 'Checking public channels history for item'
+      return webClient.channels_info(channel: data.item.channel)['channel']
     when 'D'
-      log.debug "No Channel information exists for direct messages"
+      log.debug 'No Channel information exists for direct messages'
       return {}
     when 'G'
-      log.debug "Checking group history for item"
-      return webClient.groups_info( channel: data.item.channel )['group']
+      log.debug 'Checking group history for item'
+      return webClient.groups_info(channel: data.item.channel)['group']
     else
       log.warn "Couldn't detect Channel Type for #{data.item.channel} - Aborting"
       raise UnableToDetectChannelType, "Did not recognise Channel Short Ident: #{data.item.channel}"
     end
-    return nil
+    nil
   end
 
   def get_user(user_id)
     log.debug "Locating User object for #{user_id}"
-    @users.find{ |u| u['id'] == user_id }
+    @users.find { |u| u['id'] == user_id }
   end
 
   def replace_mentions(msg_text)
-    msg_text.gsub(/\<@([^\>]*)\>/){ |id|
-       # Might fail if user can't be found.. (ie is new since app started)
+    msg_text.gsub(/\<@([^\>]*)\>/) { |id|
+        # Might fail if user can't be found.. (ie is new since app started)
         ux = get_user id[2..-2]
         log.debug "Foudn user in msg: #{id}"
         '@' + ux['name']
-      }
+    }
   end
 
   def get_image_path(attached)
-    image_path=nil
+    image_path = nil
     # Web links do this
     image_path = attached['image_url'] unless attached['image_url'].nil?
     # YouTube does this
@@ -266,25 +261,24 @@ class PrinterBot
     return if image_path.nil?
     rotate = 0
     rotate = 180 if UPSIDE_DOWN
-    #image = Escpos::Image.new image_path
+    # image = Escpos::Image.new image_path
     # to use automatic conversion to monochrome format (requires mini_magick gem) use:
-    image = Escpos::Image.new image_path, {
+    image = Escpos::Image.new image_path,
       rotate: rotate,
       resize: '360x360',
       convert_to_monochrome: true,
       dither: true, # the default
       extent: true, # the default
-    }
+
     image
   end
 
-
   def send_data_to_printer(data)
     # Bypass printing to save on paper
-    return  if DEBUG_NO_PRINT
+    return if DEBUG_NO_PRINT
 
-    fd = IO.sysopen PRINTER_TTY, "w"
-    ios = IO.new(fd, "w")
+    fd = IO.sysopen PRINTER_TTY, 'w'
+    ios = IO.new(fd, 'w')
     ios.puts data
     # Printing Handled
     ios.close
@@ -301,14 +295,14 @@ Slack::RealTime.configure do |config|
   config.token = REALTIME_TOKEN
   config.logger = Logger.new(STDOUT)
   config.logger.level = Logger::WARN
-  fail 'Missing ENV[SLACK_AUTH_TOKEN]!' unless config.token
+  raise 'Missing ENV[SLACK_AUTH_TOKEN]!' unless config.token
 end
 
 Slack::Web.configure do |config|
   config.token = WEB_TOKEN
   config.logger = Logger.new(STDOUT)
   config.logger.level = Logger::WARN
-  fail 'Missing ENV[SLACK_AUTH_TOKEN]!' unless config.token
+  raise 'Missing ENV[SLACK_AUTH_TOKEN]!' unless config.token
 end
 
 log = Logger.new(STDOUT)
